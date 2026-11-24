@@ -17,4 +17,10 @@ contextBridge.exposeInMainWorld('planningApi', {
   exportJson: call('db:exportJson'),
   importJson: call('db:importJson'),
   onChanged: fn => ipcRenderer.on('db:changed', () => fn()),
+  checkUpdate: call('update:check'),
+  pendingUpdate: call('update:pending'),
+  installUpdate: call('update:install'),
+  openRelease: call('update:openRelease'),
+  onUpdate: fn => ipcRenderer.on('update:available', (_, u) => fn(u)),
+  onUpdateProgress: fn => ipcRenderer.on('update:progress', (_, p) => fn(p)),
 });

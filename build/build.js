@@ -10,7 +10,7 @@ const root = path.join(__dirname, '..');
 const out = path.join(os.tmpdir(), 'planning-chantiers-build');
 const dist = path.join(root, 'dist');
 fs.rmSync(out, {recursive: true, force: true});
-const args = ['electron-builder', '--mac', ...process.argv.slice(2), `-c.directories.output=${out}`];
+const args = ['electron-builder', '--mac', '--publish', 'never', ...process.argv.slice(2), `-c.directories.output=${out}`];
 execFileSync('npx', args, {cwd: root, stdio: 'inherit'});
 fs.mkdirSync(dist, {recursive: true});
 for (const f of fs.readdirSync(out).filter(f => /\.(dmg|zip)$/.test(f))) {
