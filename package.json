@@ -13,7 +13,8 @@
   "scripts": {
     "start": "electron .",
     "dist": "node build/build.js",
-    "dist:universal": "node build/build.js --universal"
+    "dist:universal": "node build/build.js --universal",
+    "test": "ELECTRON_RUN_AS_NODE=1 electron test/run.js"
   },
   "build": {
     "appId": "fr.planning-chantiers.app",
@@ -23,6 +24,7 @@
       "main.js",
       "preload.js",
       "db.js",
+      "updater.js",
       "index.html",
       "package.json"
     ],
@@ -41,11 +43,16 @@
           "target": "zip"
         }
       ],
-      "identity": null
+      "identity": null,
+      "artifactName": "planning-chantiers-${version}-${arch}.${ext}"
     },
     "dmg": {
       "title": "Planning Chantiers ${version}"
     },
     "afterPack": "build/adhoc-sign.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gllsoft/planning-chantiers.git"
   }
 }

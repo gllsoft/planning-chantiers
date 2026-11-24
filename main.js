@@ -3,6 +3,7 @@ const {app, BrowserWindow, Menu, dialog, ipcMain, shell} = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const {Store} = require('./db');
+const updater = require('./updater');
 
 const DB_NAME = 'planning-chantiers.sqlite';
 const BACKUP_DIR = 'Sauvegardes';
@@ -215,8 +216,48 @@ async function importJson() {
   return true;
 }
 
+/* ---------- Mises à jour ---------- */
+let pendingUpdate = null;
+let installing = false;
+
+async function checkUpdates(manual = false) {
+  try {
+    pendingUpdate = await updater.check();
+  } catch (e) {
+    if (manual) dialog.showErrorBox('Recherche de mise à jour impossible', e.message);
+    return null;
+  }
+  if (pendingUpdate) win?.webContents.send('update:available', pendingUpdate);
+  else if (manual) dialog.showMessageBox(win, {type: 'info', message: 'Planning Chantiers est à jour.', detail: `Version ${app.getVersion()}`});
+  return pendingUpdate;
+}
+
+async function installUpdate() {
+  if (!pendingUpdate || installing) return false;
+  const target = updater.installablePath();
+  if (!target.ok) {
+    const {response} = await dialog.showMessageBox(win, {
+      type: 'warning', buttons: ['Télécharger l\'image disque', 'Annuler'], defaultId: 0, cancelId: 1,
+      message: 'Installation automatique impossible', detail: target.reason,
+    });
+    if (response === 0) shell.openExternal(pendingUpdate.dmg || pendingUpdate.url);
+    return false;
+  }
+  installing = true;
+  try {
+    if (!store.isEmpty()) backup('avant-mise-a-jour');
+    await updater.downloadAndInstall(pendingUpdate, p => win?.webContents.send('update:progress', p));
+    app.quit(); // le script d'installation attend la fermeture, remplace l'application et la relance
+    return true;
+  } catch (e) {
+    installing = false;
+    throw e;
+  }
+}
+
 /* ---------- IPC ---------- */
 const info = () => ({
+  version: app.getVersion(),
   dataDir: config.dataDir, dbFile: dbFile(), backupDir: backupDir(),
   autoBackup: config.autoBackup, keepBackups: config.keepBackups,
   backups: listBackups().slice(0, 50).map(({name, file, mtime}) => ({name, file, mtime})),
@@ -240,6 +281,10 @@ const handlers = {
   },
   'db:exportJson': exportJson,
   'db:importJson': importJson,
+  'update:check': () => checkUpdates(true),
+  'update:pending': () => pendingUpdate,
+  'update:install': installUpdate,
+  'update:openRelease': () => pendingUpdate?.url.startsWith(updater.RELEASES_URL) && shell.openExternal(pendingUpdate.url),
 };
 for (const [ch, fn] of Object.entries(handlers)) ipcMain.handle(ch, fn);
 
@@ -253,7 +298,16 @@ async function menuAction(fn, okMsg) {
 
 function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    {role: 'appMenu'},
+    {role: 'appMenu', submenu: [
+      {role: 'about'},
+      {label: 'Rechercher des mises à jour…', click: () => checkUpdates(true)},
+      {type: 'separator'},
+      {role: 'services'},
+      {type: 'separator'},
+      {role: 'hide'}, {role: 'hideOthers'}, {role: 'unhide'},
+      {type: 'separator'},
+      {role: 'quit'},
+    ]},
     {label: 'Fichier', submenu: [
       {label: 'Sauvegarder maintenant', accelerator: 'CmdOrCtrl+S', click: () => menuAction(() => backup('manuelle'), 'Sauvegarde créée')},
       {label: 'Enregistrer une sauvegarde sous…', accelerator: 'CmdOrCtrl+Shift+S', click: () => menuAction(backupAs, 'Sauvegarde enregistrée')},
@@ -305,6 +359,11 @@ else {
     try { autoBackup(); } catch (e) { console.error('Sauvegarde automatique impossible :', e); }
     buildMenu();
     createWindow();
+    // Vérification au démarrage puis toutes les 6 heures (application installée uniquement).
+    if (app.isPackaged) {
+      win.webContents.once('did-finish-load', () => setTimeout(() => checkUpdates(false), 3000));
+      setInterval(() => checkUpdates(false), 6 * 3600e3);
+    }
     app.on('activate', () => { if (!win) createWindow(); });
   });
   app.on('window-all-closed', () => app.quit());

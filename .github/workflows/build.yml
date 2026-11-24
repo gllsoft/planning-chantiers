@@ -1,0 +1,46 @@
+# Vérifie chaque Pull Request (et chaque push sur develop) : tests + construction de l'image .dmg,
+# téléchargeable dans l'onglet « Summary » du run (section Artifacts).
+name: Build
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Construire l'application
+        run: npm run dist
+
+      - name: Publier l'image .dmg (artefact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: planning-chantiers-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/*.dmg
+          if-no-files-found: error
+          retention-days: 14
