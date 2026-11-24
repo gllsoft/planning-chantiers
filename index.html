@@ -107,6 +107,10 @@ menu{display:flex;gap:8px;padding:0;margin:8px 0 0;align-items:center}
 .bklist{max-height:130px;overflow:auto;border-top:1px solid var(--line2)}
 .bklist div{display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--line2);font-size:12px}
 .bklist div span{flex:1}
+#updateBar{display:flex;align-items:center;gap:10px;padding:8px 16px;background:#e8f0fd;border-bottom:1px solid #c9daf8;font-size:13px}
+#updateBar[hidden]{display:none}
+#updateBar .spacer{flex:1}
+.about{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1d2430;color:#fff;padding:8px 14px;border-radius:8px;font-size:12px;display:none;z-index:100;max-width:80vw}
 table.edit{border-collapse:collapse;width:100%}
 table.edit th{font-size:11px;color:var(--muted);font-weight:500;text-align:left;padding:2px 4px}
@@ -128,6 +132,14 @@ table.edit input,table.edit select{width:100%}
   <button id="btnImport">Importer</button>
   <button id="btnReset" class="danger">Données démo</button>
 </header>
+
+<div id="updateBar" hidden>
+  <span>🎉 <b id="updVersion"></b> <span id="updText"></span></span>
+  <span class="spacer"></span>
+  <button type="button" id="updNotes">Nouveautés</button>
+  <button type="button" id="updLater">Plus tard</button>
+  <button type="button" class="primary" id="updInstall">Installer et redémarrer</button>
+</div>
 
 <main>
   <div class="kpis" id="kpis"></div>
@@ -225,6 +237,8 @@ table.edit input,table.edit select{width:100%}
         </div>
         <div class="bklist" id="dbBackups"></div>
       </div>
+      <div class="about" style="margin-top:8px">Planning Chantiers <span id="appVersion"></span>
+        <button type="button" id="btnCheckUpdate">Rechercher des mises à jour</button></div>
     </div>
     <menu><span class="spacer"></span><button type="button" data-close>Annuler</button><button class="primary">Enregistrer</button></menu>
   </form>
@@ -624,6 +638,7 @@ function openSettings() {
 const fdt = ms => new Date(ms).toLocaleString('fr-FR', {dateStyle: 'short', timeStyle: 'short'});
 async function refreshDbInfo() {
   const i = await api.info();
+  $('#appVersion').textContent = 'v' + i.version;
   $('#dbDir').textContent = i.dataDir; $('#dbDir').title = i.dbFile;
   $('#dbAuto').checked = i.autoBackup; $('#dbKeep').value = i.keepBackups;
   $('#dbBackups').innerHTML = i.backups.length ? i.backups.slice(0, 15).map(b =>
@@ -655,6 +670,33 @@ api.onChanged(async () => {
   render();
   toast('Base de données chargée');
 });
+
+/* ---------- Mises à jour (Releases GitHub) ---------- */
+let updateDismissed = null, updateShown = null;
+function showUpdate(u) {
+  if (!u || u.version === updateDismissed) return;
+  updateShown = u.version;
+  $('#updVersion').textContent = `Version ${u.version} disponible`;
+  $('#updText').textContent = `(vous utilisez la ${u.current})`;
+  $('#updInstall').disabled = false; $('#updInstall').textContent = 'Installer et redémarrer';
+  $('#updateBar').hidden = false;
+}
+api.onUpdate(showUpdate);
+api.pendingUpdate().then(showUpdate);
+api.onUpdateProgress(p => { $('#updInstall').textContent = `Téléchargement… ${Math.round(p * 100)} %`; });
+$('#updLater').onclick = () => { updateDismissed = updateShown; $('#updateBar').hidden = true; };
+$('#updNotes').onclick = () => api.openRelease();
+$('#updInstall').onclick = async () => {
+  $('#updInstall').disabled = true; $('#updInstall').textContent = 'Téléchargement…';
+  try {
+    if (await api.installUpdate()) $('#updInstall').textContent = 'Redémarrage…';
+    else { $('#updInstall').disabled = false; $('#updInstall').textContent = 'Installer et redémarrer'; }
+  } catch (e) {
+    alert('La mise à jour a échoué :\n' + e.message);
+    $('#updInstall').disabled = false; $('#updInstall').textContent = 'Réessayer';
+  }
+};
+$('#btnCheckUpdate').onclick = () => api.checkUpdate();
 $('#addTeam').onclick = () => $('#teamRows').insertAdjacentHTML('beforeend', teamRow({id: uid(), name: 'Équipe ' + ($('#teamRows').children.length + 1), capacity: 2}));
 $('#teamRows').addEventListener('click', ev => { if (ev.target.closest('[data-del]')) ev.target.closest('tr').remove(); });
 fP.addEventListener('submit', ev => {
