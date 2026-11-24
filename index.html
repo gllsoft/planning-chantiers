@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Planning Chantiers</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#fff; --line:#e3e6ea; --line2:#eef0f3; --text:#1d2430; --muted:#6b7480;
+  --accent:#2f6fde; --late:#d64545; --ok:#2e9d5b; --warn:#e8833a; --nonwork:#f0f2f5; --holiday:#fbeee4;
+  --leftw:640px;
+}
+*{box-sizing:border-box}
+body{margin:0;font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:16px;margin:0 16px 0 0}
+.spacer{flex:1}
+button,select,input,textarea{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{background:#f2f4f7}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.primary:hover{background:#265ec0}
+button.danger{color:var(--late);border-color:#f0c4c4}
+button.icon{border:none;background:none;padding:2px 4px;color:var(--muted)}
+button.icon:hover{color:var(--text)}
+select,input,textarea{border:1px solid var(--line);border-radius:6px;padding:5px 7px;background:#fff}
+main{padding:12px 16px;display:flex;flex-direction:column;gap:12px}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.kpi b{display:block;font-size:18px}
+.kpi span{color:var(--muted);font-size:12px}
+
+.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.legend i{display:inline-block;width:22px;height:10px;border-radius:3px;vertical-align:middle;margin-right:4px}
+
+.gantt{overflow:auto;max-height:calc(100vh - 260px);min-height:300px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.g-inner{position:relative}
+.g-row{display:flex;height:32px;border-bottom:1px solid var(--line2)}
+.g-left{position:sticky;left:0;z-index:5;background:var(--panel);width:var(--leftw);flex:none;display:grid;
+  grid-template-columns:1fr 58px 58px 58px 58px 60px 70px;align-items:center;border-right:1px solid var(--line)}
+.g-left>div{padding:0 6px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.g-left>div:first-child{text-align:left}
+.g-time{position:relative;flex:none;z-index:1}
+.g-head{position:sticky;top:0;z-index:10;background:var(--panel)}
+.g-head .g-row{height:22px;border-bottom:1px solid var(--line)}
+.g-head .g-left{z-index:11;color:var(--muted);font-size:11px}
+.g-head .g-time{background:var(--panel)}
+.hcell{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);border-left:1px solid var(--line2);overflow:hidden;white-space:nowrap}
+.hcell.month{justify-content:flex-start;padding-left:6px;font-weight:600;color:var(--text)}
+.hcell.today{background:var(--warn);color:#fff;border-radius:3px}
+.bg{position:absolute;top:0;bottom:0;pointer-events:none;z-index:0}
+.bg .nw{position:absolute;top:0;bottom:0;background:var(--nonwork)}
+.bg .hol{background:var(--holiday)}
+.bg .todayline{position:absolute;top:0;bottom:0;width:2px;background:var(--warn);opacity:.8}
+
+.row-ch .g-left{background:#fafbfc;font-weight:600}
+.row-ch{background:rgba(0,0,0,.015)}
+.row-ph .g-left>div:first-child{padding-left:28px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.tag{display:inline-block;font-size:10px;font-weight:500;color:var(--muted);background:#eef1f5;border-radius:4px;padding:0 5px;margin-left:6px}
+.status{font-size:10px;margin-left:4px}
+.pos{color:var(--late)} .neg{color:var(--ok)} .lateTxt{color:var(--late);font-weight:600}
+.clickable{cursor:pointer} .clickable:hover{text-decoration:underline}
+
+.bar{position:absolute;top:8px;height:15px;border-radius:4px;cursor:pointer}
+.bar.done{background:var(--c)}
+.bar.rem{background:repeating-linear-gradient(135deg,var(--c) 0 6px,color-mix(in srgb,var(--c) 55%,white) 6px 12px)}
+.bar.late{box-shadow:0 0 0 2px var(--late)}
+.base{position:absolute;top:26px;height:3px;border-radius:2px;background:#9aa3ae;opacity:.7}
+.sum{position:absolute;top:11px;height:9px;background:var(--c);opacity:.85;border-radius:2px}
+.sum:before,.sum:after{content:"";position:absolute;bottom:-5px;border:5px solid transparent;border-top-color:var(--c)}
+.sum:before{left:0;border-left-color:var(--c)} .sum:after{right:0;border-right-color:var(--c)}
+.blabel{position:absolute;top:8px;font-size:11px;color:var(--muted);white-space:nowrap;pointer-events:none}
+
+.sep .g-left{font-weight:600;color:var(--muted);background:#fafbfc}
+.loadcell{position:absolute;top:6px;bottom:6px;display:flex;align-items:center;justify-content:center;font-size:10px;border-radius:2px;color:#fff}
+.load-ok{background:#8fc9a6} .load-full{background:var(--ok)} .load-over{background:var(--late)}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.card h2{font-size:14px;margin:0 0 8px}
+table.list{width:100%;border-collapse:collapse}
+table.list th,table.list td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line2)}
+table.list th{color:var(--muted);font-weight:500;font-size:12px}
+table.list td.num{text-align:right;font-variant-numeric:tabular-nums}
+.journal{max-height:260px;overflow:auto}
+.muted{color:var(--muted)}
+
+dialog{border:none;border-radius:12px;padding:0;box-shadow:0 20px 60px rgba(0,0,0,.25);max-width:calc(100vw - 32px)}
+dialog::backdrop{background:rgba(20,25,35,.35)}
+dialog form{padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+dialog h2{margin:0;font-size:16px} dialog h3{margin:6px 0 0;font-size:13px}
+dialog label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+dialog label input,dialog label select,dialog label textarea{color:var(--text)}
+dialog label.inline{flex-direction:row;align-items:center;gap:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:2fr 2fr 70px;gap:10px}
+.info{background:#f3f6fb;border-radius:6px;padding:8px 10px;font-size:12px}
+.hint{color:var(--muted);font-size:12px;margin:0}
+menu{display:flex;gap:8px;padding:0;margin:8px 0 0;align-items:center}
+.dbbox{border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:#fafbfc}
+.dbpath{font:12px ui-monospace,Menlo,monospace;word-break:break-all;color:var(--text)}
+.dbrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.dbrow input[type=number]{width:64px}
+.bklist{max-height:130px;overflow:auto;border-top:1px solid var(--line2)}
+.bklist div{display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--line2);font-size:12px}
+.bklist div span{flex:1}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1d2430;color:#fff;padding:8px 14px;border-radius:8px;font-size:12px;display:none;z-index:100;max-width:80vw}
+table.edit{border-collapse:collapse;width:100%}
+table.edit th{font-size:11px;color:var(--muted);font-weight:500;text-align:left;padding:2px 4px}
+table.edit td{padding:2px 4px}
+table.edit input,table.edit select{width:100%}
+.days{display:flex;gap:8px;flex-wrap:wrap}
+#tip{position:fixed;z-index:100;pointer-events:none;background:#1d2430;color:#fff;font-size:12px;padding:6px 8px;border-radius:6px;white-space:pre-line;display:none;max-width:320px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Planning chantiers</h1>
+  <button class="primary" id="btnSaisie">+ Saisie de temps</button>
+  <button id="btnNew">+ Chantier</button>
+  <span class="spacer"></span>
+  <button id="btnBackup" title="Créer une sauvegarde de la base (⌘S)">Sauvegarder</button>
+  <button id="btnSettings">Paramètres</button>
+  <button id="btnExport">Exporter</button>
+  <button id="btnImport">Importer</button>
+  <button id="btnReset" class="danger">Données démo</button>
+</header>
+
+<main>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="toolbar">
+    <label>Échelle
+      <select id="zoom"><option value="day">Jours</option><option value="week">Semaines</option></select>
+    </label>
+    <div class="legend">
+      <span><i style="background:#5b8def"></i>Réalisé</span>
+      <span><i style="background:repeating-linear-gradient(135deg,#5b8def 0 6px,#b3c9f6 6px 12px)"></i>Reste à faire (prévision)</span>
+      <span><i style="height:3px;background:#9aa3ae"></i>Prévu au devis</span>
+      <span><i style="box-shadow:0 0 0 2px var(--late);background:#fff"></i>En retard sur le devis</span>
+      <span><i style="width:2px;background:var(--warn)"></i>Aujourd'hui</span>
+    </div>
+  </div>
+
+  <div class="gantt" id="gantt"></div>
+
+  <div class="card">
+    <h2>Journal des saisies</h2>
+    <div class="journal" id="journal"></div>
+  </div>
+</main>
+
+<!-- Saisie de temps -->
+<dialog id="dlgSaisie">
+  <form id="fSaisie" style="width:440px">
+    <h2>Saisie de temps</h2>
+    <label>Phase<select name="phaseId" required></select></label>
+    <div class="info" id="saisieInfo"></div>
+    <div class="grid2">
+      <label>Date<input type="date" name="date" required></label>
+      <label>Temps passé (h)<input type="number" name="spent" min="0" step="0.25" required></label>
+    </div>
+    <label>Reste à faire après cette saisie (h)<input type="number" name="raf" min="0" step="0.25" required></label>
+    <label>Commentaire<input name="comment" placeholder="optionnel"></label>
+    <menu><span class="spacer"></span><button type="button" data-close>Annuler</button><button class="primary">Enregistrer</button></menu>
+  </form>
+</dialog>
+
+<!-- Chantier -->
+<dialog id="dlgChantier">
+  <form id="fChantier" style="width:820px">
+    <h2 id="chTitle">Chantier</h2>
+    <div class="grid3">
+      <label>Nom du chantier<input name="name" required></label>
+      <label>Client<input name="client"></label>
+      <label>Couleur<input type="color" name="color" style="height:30px;padding:2px"></label>
+    </div>
+    <label style="max-width:200px">Date de début souhaitée<input type="date" name="startDate" required></label>
+    <h3>Phases</h3>
+    <p class="hint">Chantier d'une traite = une seule phase. Pour le fractionner, ajoutez des phases ; une phase « Date fixe » peut démarrer plus tard (interruption entre phases).</p>
+    <table class="edit">
+      <thead><tr><th>Phase</th><th style="width:80px">Devis (h)</th><th style="width:60px">Pers.</th><th style="width:130px">Équipe</th><th style="width:130px">Début</th><th style="width:130px">Date fixe</th><th style="width:60px">Durée</th><th style="width:30px"></th></tr></thead>
+      <tbody id="phRows"></tbody>
+    </table>
+    <div><button type="button" id="addPhase">+ Phase</button></div>
+    <menu><button type="button" id="delChantier" class="danger">Supprimer le chantier</button><span class="spacer"></span><button type="button" data-close>Annuler</button><button class="primary">Enregistrer</button></menu>
+  </form>
+</dialog>
+
+<!-- Paramètres -->
+<dialog id="dlgSettings">
+  <form id="fSettings" style="width:520px">
+    <h2>Paramètres</h2>
+    <label style="max-width:220px">Heures travaillées par jour et par personne<input type="number" name="hoursPerDay" min="1" max="24" step="0.25" required></label>
+    <div>
+      <div class="hint" style="margin-bottom:4px">Jours ouvrés</div>
+      <div class="days" id="workDays"></div>
+    </div>
+    <label class="inline"><input type="checkbox" name="frHolidays"> Exclure les jours fériés français</label>
+    <label>Autres jours non travaillés (congés, fermeture…) — un par ligne, AAAA-MM-JJ<textarea name="holidays" rows="3"></textarea></label>
+    <h3>Équipes</h3>
+    <table class="edit"><thead><tr><th>Nom</th><th style="width:140px">Capacité (personnes)</th><th style="width:30px"></th></tr></thead><tbody id="teamRows"></tbody></table>
+    <div><button type="button" id="addTeam">+ Équipe</button></div>
+    <div id="dbSection">
+      <h3>Base de données</h3>
+      <div class="dbbox">
+        <div><div class="hint">Dossier de travail</div><div class="dbpath" id="dbDir"></div></div>
+        <div class="dbrow">
+          <button type="button" id="dbChange">Changer de dossier…</button>
+          <button type="button" id="dbReveal">Afficher dans le Finder</button>
+        </div>
+        <div class="hint">Sauvegardes (dossier « Sauvegardes » du dossier de travail)</div>
+        <div class="dbrow">
+          <label class="inline"><input type="checkbox" id="dbAuto"> Sauvegarde automatique quotidienne, garder les</label>
+          <input type="number" id="dbKeep" min="1" max="365" step="1"> <span class="hint">dernières</span>
+        </div>
+        <div class="dbrow">
+          <button type="button" id="dbBackupNow">Sauvegarder maintenant</button>
+          <button type="button" id="dbBackupAs">Enregistrer sous…</button>
+          <button type="button" id="dbRestore">Restaurer un fichier…</button>
+          <button type="button" id="dbRevealBk" class="icon" title="Ouvrir le dossier des sauvegardes">📂</button>
+        </div>
+        <div class="bklist" id="dbBackups"></div>
+      </div>
+    </div>
+    <menu><span class="spacer"></span><button type="button" data-close>Annuler</button><button class="primary">Enregistrer</button></menu>
+  </form>
+</dialog>
+
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const uid = () => Math.random().toString(36).slice(2, 10);
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = (n, d = 1) => (Math.round(n * 10 ** d) / 10 ** d).toLocaleString('fr-FR');
+const signed = n => (n > 0 ? '+' : '') + num(n);
+
+/* ---------- Dates (chaînes AAAA-MM-JJ, calcul en UTC pour éviter les soucis d'heure d'été) ---------- */
+const D = s => { const [y, m, d] = s.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+const S = d => d.toISOString().slice(0, 10);
+const addDays = (s, n) => { const d = D(s); d.setUTCDate(d.getUTCDate() + n); return S(d); };
+const dow = s => D(s).getUTCDay();
+const diffDays = (a, b) => Math.round((D(b) - D(a)) / 864e5);
+const maxD = (a, b) => (a > b ? a : b);
+const todayStr = () => { const t = new Date(); return S(new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()))); };
+const fd = s => s ? s.slice(8, 10) + '/' + s.slice(5, 7) : '';
+const fdl = s => s ? D(s).toLocaleDateString('fr-FR', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'}) : '';
+const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+const DAYL = ['D','L','M','M','J','V','S'];
+
+function isoWeek(s) {
+  const d = D(s); const day = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - day + 3);
+  const fy = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((d - fy) / 864e5 - 3 + ((fy.getUTCDay() + 6) % 7)) / 7);
+}
+function easter(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4,
+    f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30,
+    i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return S(new Date(Date.UTC(y, month - 1, day)));
+}
+const holidayCache = {};
+function frHolidays(y) {
+  if (holidayCache[y]) return holidayCache[y];
+  const e = easter(y);
+  return holidayCache[y] = new Map([
+    [`${y}-01-01`, "Jour de l'an"], [addDays(e, 1), 'Lundi de Pâques'], [`${y}-05-01`, 'Fête du travail'],
+    [`${y}-05-08`, 'Victoire 1945'], [addDays(e, 39), 'Ascension'], [addDays(e, 50), 'Lundi de Pentecôte'],
+    [`${y}-07-14`, 'Fête nationale'], [`${y}-08-15`, 'Assomption'], [`${y}-11-01`, 'Toussaint'],
+    [`${y}-11-11`, 'Armistice'], [`${y}-12-25`, 'Noël']]);
+}
+function holidayName(s) {
+  if (state.settings.frHolidays) { const n = frHolidays(+s.slice(0, 4)).get(s); if (n) return n; }
+  return state.settings.holidays.includes(s) ? 'Non travaillé' : null;
+}
+const isWork = s => state.settings.workDays.includes(dow(s)) && !holidayName(s);
+function onOrAfterWork(s) { for (let i = 0; i < 400 && !isWork(s); i++) s = addDays(s, 1); return s; }
+const nextWork = s => onOrAfterWork(addDays(s, 1));
+function addWork(s, n) { for (let i = 0; i < n; i++) s = nextWork(s); return s; }
+
+/* ---------- Données ---------- */
+function demo() {
+  const t = todayStr(), mon = addDays(t, -((dow(t) + 6) % 7)), d = n => addDays(mon, n);
+  const ph = (name, hours, people, teamId, startMode = 'after', startDate = '') => ({id: uid(), name, hours, people, teamId, startMode, startDate});
+  const c1 = {id: uid(), name: 'Rénovation maison', client: 'M. Durand', color: '#2f6fde', startDate: d(-14),
+    phases: [ph('Démolition', 42, 2, 'tA'), ph('Gros œuvre', 126, 3, 'tB'), ph('Finitions', 84, 2, 'tA')]};
+  const c2 = {id: uid(), name: 'Extension garage', client: 'Mme Morel', color: '#2e9d5b', startDate: d(-7),
+    phases: [ph('Réalisation complète', 70, 2, 'tA')]};
+  const c3 = {id: uid(), name: 'Réfection toiture', client: 'SCI Kerlann', color: '#b5651d', startDate: d(7),
+    phases: [ph('Charpente', 56, 2, 'tB'), ph('Couverture', 63, 3, 'tB', 'date', d(28))]};
+  let ts = 0;
+  const e = (p, date, spent, raf, comment = '') => ({id: uid(), phaseId: p.id, date, spent, raf, comment, ts: ts++});
+  const [dem, go] = c1.phases, gar = c2.phases[0];
+  return {
+    settings: {hoursPerDay: 7, workDays: [1, 2, 3, 4, 5], frHolidays: true, holidays: []},
+    teams: [{id: 'tA', name: 'Équipe A', capacity: 2}, {id: 'tB', name: 'Équipe B', capacity: 3}],
+    chantiers: [c1, c2, c3],
+    entries: [
+      e(dem, d(-14), 14, 28), e(dem, d(-13), 14, 21, 'Cloison porteuse imprévue'), e(dem, d(-12), 14, 7), e(dem, d(-11), 7, 0),
+      e(go, d(-10), 21, 105), e(go, d(-7), 21, 90), e(go, d(-6), 21, 75), e(go, d(-5), 14, 66, 'Attente livraison'), e(go, d(-4), 21, 50),
+      e(gar, d(-7), 14, 56), e(gar, d(-6), 10, 50),
+    ],
+  };
+}
+const emptyState = () => ({settings: {hoursPerDay: 7, workDays: [1, 2, 3, 4, 5], frHolidays: true, holidays: []}, teams: [], chantiers: [], entries: []});
+
+/* ---------- Stockage : base SQLite gérée par l'application (voir main.js / db.js) ---------- */
+const api = window.planningApi;
+let saveError = false;
+async function load() { return await api.load() || emptyState(); }
+function save() {
+  api.save(state).then(() => { saveError = false; }).catch(err => {
+    if (!saveError) alert("Impossible d'enregistrer dans la base de données :\n" + err.message);
+    saveError = true;
+  });
+}
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = 'none', 3500);
+}
+let state = emptyState();
+const ui = {zoom: 'day', collapsed: new Set()};
+
+/* ---------- Moteur de planification ----------
+   - Devis en heures -> durée en jours ouvrés = ceil(heures / (h/jour × personnes)).
+   - Ligne de base : enchaînement des phases selon le devis initial.
+   - Prévision : le RAF de la dernière saisie remplace le devis ; le reste démarre
+     au plus tôt le lendemain de la dernière saisie et jamais avant aujourd'hui.
+     Les phases suivantes (mode « après ») glissent en conséquence. */
+function compute() {
+  const hpd = +state.settings.hoursPerDay || 7, todayW = onOrAfterWork(todayStr());
+  const R = {phases: {}, chantiers: {}, load: {}};
+  const byPhase = {};
+  [...state.entries].sort((a, b) => a.date.localeCompare(b.date) || a.ts - b.ts)
+    .forEach(e => (byPhase[e.phaseId] ??= []).push(e));
+  const addLoad = (teamId, from, to, people) => {
+    if (!teamId || !from) return;
+    const L = (R.load[teamId] ??= {});
+    for (let d = from; d <= to; d = addDays(d, 1)) if (isWork(d)) L[d] = (L[d] || 0) + people;
+  };
+  for (const c of state.chantiers) {
+    let prevBase = null, prevFc = null;
+    const A = {hours: 0, spent: 0, raf: 0, start: null, end: null, baseStart: null, baseEnd: null, late: false};
+    for (const p of c.phases) {
+      const people = Math.max(1, +p.people || 1), cap = hpd * people, hours = +p.hours || 0;
+      const fixed = p.startMode === 'date' && p.startDate;
+      const baseStart = onOrAfterWork(fixed ? p.startDate : prevBase ? addDays(prevBase, 1) : c.startDate);
+      const baseEnd = addWork(baseStart, Math.max(1, Math.ceil(hours / cap)) - 1);
+      const ents = byPhase[p.id] || [];
+      const spent = ents.reduce((s, e) => s + (+e.spent || 0), 0);
+      const raf = ents.length ? (+ents[ents.length - 1].raf || 0) : hours;
+      const realStart = ents.length ? ents[0].date : null, lastDate = ents.length ? ents[ents.length - 1].date : null;
+      const planStart = onOrAfterWork(fixed ? p.startDate : prevFc ? addDays(prevFc, 1) : c.startDate);
+      let remStart = null, end;
+      if (raf > 0) {
+        remStart = lastDate ? maxD(nextWork(lastDate), todayW) : maxD(planStart, todayW);
+        end = addWork(remStart, Math.ceil(raf / cap) - 1);
+      } else end = lastDate || baseEnd;
+      const forecast = spent + raf;
+      const r = {baseStart, baseEnd, realStart, lastDate, remStart, end, spent, raf, hours, people, forecast,
+        ecart: forecast - hours, pct: forecast > 0 ? spent / forecast : 0, late: end > baseEnd,
+        status: !ents.length ? 'todo' : raf > 0 ? 'wip' : 'done', remDays: remStart ? Math.ceil(raf / cap) : 0,
+        start: realStart || remStart || baseStart};
+      R.phases[p.id] = r;
+      addLoad(p.teamId, realStart, lastDate, people);
+      addLoad(p.teamId, remStart, remStart ? end : null, people);
+      prevBase = baseEnd; prevFc = end;
+      A.hours += hours; A.spent += spent; A.raf += raf; A.late ||= r.late;
+      if (!A.start || r.start < A.start) A.start = r.start;
+      if (!A.end || end > A.end) A.end = end;
+      if (!A.baseStart || baseStart < A.baseStart) A.baseStart = baseStart;
+      if (!A.baseEnd || baseEnd > A.baseEnd) A.baseEnd = baseEnd;
+    }
+    A.forecast = A.spent + A.raf; A.ecart = A.forecast - A.hours; A.pct = A.forecast > 0 ? A.spent / A.forecast : 0;
+    R.chantiers[c.id] = A;
+  }
+  return R;
+}
+
+/* ---------- Rendu ---------- */
+function render() {
+  const R = compute();
+  renderKpis(R); renderGantt(R); renderJournal(); save();
+}
+
+function renderKpis(R) {
+  const all = Object.values(R.chantiers), ph = Object.values(R.phases);
+  const sum = k => all.reduce((s, a) => s + a[k], 0);
+  const hpd = state.settings.hoursPerDay, ecart = sum('ecart');
+  const over = Object.entries(R.load).reduce((n, [tid, L]) => {
+    const cap = state.teams.find(t => t.id === tid)?.capacity ?? Infinity;
+    return n + Object.entries(L).filter(([d, v]) => d >= todayStr() && v > cap).length;
+  }, 0);
+  $('#kpis').innerHTML = [
+    [state.chantiers.length, 'chantiers'],
+    [num(sum('hours')) + ' h', `devis (${num(sum('hours') / hpd)} j·h)`],
+    [num(sum('spent')) + ' h', 'temps passé'],
+    [num(sum('raf')) + ' h', `reste à faire (${num(sum('raf') / hpd)} j·h)`],
+    [`<span class="${ecart > 0 ? 'pos' : 'neg'}">${signed(ecart)} h</span>`, 'écart prévision / devis'],
+    [`<span class="${ph.some(p => p.late) ? 'pos' : ''}">${ph.filter(p => p.late && p.status !== 'done').length}</span>`, 'phases en retard'],
+    [`<span class="${over ? 'pos' : ''}">${over}</span>`, 'jours de surcharge équipe'],
+  ].map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+}
+
+function renderGantt(R) {
+  const dw = ui.zoom === 'day' ? 30 : 12;
+  const today = todayStr();
+  let min = today, max = today;
+  for (const r of Object.values(R.phases)) {
+    for (const s of [r.baseStart, r.realStart, r.remStart]) if (s && s < min) min = s;
+    for (const s of [r.baseEnd, r.end]) if (s && s > max) max = s;
+  }
+  let start = addDays(min, -7); start = addDays(start, -((dow(start) + 6) % 7));
+  const end = addDays(max, 21), n = diffDays(start, end) + 1, tw = n * dw;
+  const X = s => diffDays(start, s) * dw, W = (a, b) => (diffDays(a, b) + 1) * dw;
+  const hpd = state.settings.hoursPerDay;
+  const teamName = id => state.teams.find(t => t.id === id)?.name;
+
+  // En-tête : mois + jours/semaines
+  let months = '', days = '';
+  for (let s = start; s <= end;) {
+    const y = +s.slice(0, 4), m = +s.slice(5, 7);
+    const e = S(new Date(Date.UTC(y, m, 0))), e2 = e < end ? e : end;
+    months += `<div class="hcell month" style="left:${X(s)}px;width:${W(s, e2)}px">${MONTHS[m - 1]} ${y}</div>`;
+    s = addDays(e2, 1);
+  }
+  let bg = '';
+  for (let i = 0; i < n; i++) {
+    const s = addDays(start, i), hol = holidayName(s);
+    if (ui.zoom === 'day')
+      days += `<div class="hcell ${s === today ? 'today' : ''}" style="left:${i * dw}px;width:${dw}px" ${hol ? `data-tip="${esc(hol)}"` : ''}>${DAYL[dow(s)]}${+s.slice(8)}</div>`;
+    else if (dow(s) === 1)
+      days += `<div class="hcell" style="left:${i * dw}px;width:${7 * dw}px" data-tip="Semaine du ${fdl(s)}">S${isoWeek(s)}</div>`;
+    if (!isWork(s)) bg += `<div class="nw ${hol ? 'hol' : ''}" style="left:${i * dw}px;width:${dw}px"></div>`;
+  }
+  bg += `<div class="todayline" style="left:${X(today) + dw / 2 - 1}px"></div>`;
+
+  const left = cells => `<div class="g-left">${cells.map(c => `<div>${c}</div>`).join('')}</div>`;
+  let rows = '';
+  rows += `<div class="g-head">
+    <div class="g-row">${left(['', '', '', '', '', '', ''])}<div class="g-time" style="width:${tw}px">${months}</div></div>
+    <div class="g-row">${left(['Chantier / phase', 'Devis h', 'Devis j·h', 'Passé h', 'RAF h', 'Écart h', 'Fin prév.'])}<div class="g-time" style="width:${tw}px">${days}</div></div>
+  </div>`;
+
+  for (const c of state.chantiers) {
+    const A = R.chantiers[c.id], open = !ui.collapsed.has(c.id);
+    const late = A.end && A.baseEnd && A.end > A.baseEnd;
+    rows += `<div class="g-row row-ch">${left([
+      `<button class="icon" data-act="toggle" data-id="${c.id}">${open ? '▾' : '▸'}</button><span class="dot" style="background:${c.color}"></span><span class="clickable" data-act="edit" data-id="${c.id}" title="Modifier le chantier">${esc(c.name)}</span> <span class="muted" style="font-weight:400">${esc(c.client)}</span>`,
+      num(A.hours), num(A.hours / hpd), num(A.spent), num(A.raf),
+      `<span class="${A.ecart > 0 ? 'pos' : A.ecart < 0 ? 'neg' : ''}">${signed(A.ecart)}</span>`,
+      `<span class="${late ? 'lateTxt' : ''}">${fd(A.end)}</span>`])}
+      <div class="g-time" style="width:${tw}px">${A.start ? `
+        <div class="base" style="left:${X(A.baseStart)}px;width:${W(A.baseStart, A.baseEnd)}px"></div>
+        <div class="sum" style="--c:${c.color};left:${X(A.start)}px;width:${W(A.start, A.end)}px" data-tip="${esc(c.name)}\nPrévision : ${fdl(A.start)} → ${fdl(A.end)}\nDevis : ${fdl(A.baseStart)} → ${fdl(A.baseEnd)}\nAvancement : ${Math.round(A.pct * 100)} %"></div>
+        <span class="blabel" style="left:${X(A.end) + dw + 6}px">${Math.round(A.pct * 100)} %${late ? ` · <span class="lateTxt">+${diffDays(A.baseEnd, A.end)} j</span>` : ''}</span>` : ''}
+      </div></div>`;
+    if (!open) continue;
+    for (const p of c.phases) {
+      const r = R.phases[p.id];
+      const st = {todo: '', wip: '<span class="status" title="En cours">●</span>', done: '<span class="status neg" title="Terminée">✔</span>'}[r.status];
+      const tip = `${esc(c.name)} — ${esc(p.name)}\nDevis : ${num(r.hours)} h (${num(r.hours / hpd)} j·h, ${r.people} pers.)\nPassé : ${num(r.spent)} h · RAF : ${num(r.raf)} h\nPrévu devis : ${fdl(r.baseStart)} → ${fdl(r.baseEnd)}\nPrévision : ${fdl(r.start)} → ${fdl(r.end)}${r.late ? `\nRetard : ${diffDays(r.baseEnd, r.end)} jours calendaires` : ''}\n(clic = saisir du temps)`;
+      let bars = `<div class="base" style="left:${X(r.baseStart)}px;width:${W(r.baseStart, r.baseEnd)}px"></div>`;
+      if (r.realStart) bars += `<div class="bar done" style="--c:${c.color};left:${X(r.realStart)}px;width:${W(r.realStart, r.lastDate)}px" data-act="saisie" data-id="${p.id}" data-tip="${tip}"></div>`;
+      if (r.remStart) bars += `<div class="bar rem ${r.late ? 'late' : ''}" style="--c:${c.color};left:${X(r.remStart)}px;width:${W(r.remStart, r.end)}px" data-act="saisie" data-id="${p.id}" data-tip="${tip}"></div>`;
+      bars += `<span class="blabel" style="left:${X(r.end) + dw + 6}px">${Math.round(r.pct * 100)} %</span>`;
+      rows += `<div class="g-row row-ph">${left([
+        `<span class="clickable" data-act="saisie" data-id="${p.id}" title="Saisir du temps">${esc(p.name)}</span>${st}${teamName(p.teamId) ? `<span class="tag">${esc(teamName(p.teamId))} · ${r.people}p</span>` : ''}`,
+        num(r.hours), num(r.hours / hpd), num(r.spent), num(r.raf),
+        `<span class="${r.ecart > 0 ? 'pos' : r.ecart < 0 ? 'neg' : ''}">${signed(r.ecart)}</span>`,
+        `<span class="${r.late ? 'lateTxt' : ''}">${fd(r.end)}</span>`])}
+        <div class="g-time" style="width:${tw}px">${bars}</div></div>`;
+    }
+  }
+
+  // Charge par équipe
+  if (state.teams.length) {
+    rows += `<div class="g-row sep">${left(['Charge équipes (personnes / jour)', '', '', '', '', '', ''])}<div class="g-time" style="width:${tw}px"></div></div>`;
+    for (const t of state.teams) {
+      const L = R.load[t.id] || {};
+      let cells = '';
+      for (const [d, v] of Object.entries(L)) {
+        if (d < start || d > end) continue;
+        const cls = v > t.capacity ? 'load-over' : v === +t.capacity ? 'load-full' : 'load-ok';
+        cells += `<div class="loadcell ${cls}" style="left:${X(d) + 1}px;width:${dw - 2}px" data-tip="${esc(t.name)} — ${fdl(d)}\n${v} pers. planifiées / capacité ${t.capacity}${v > t.capacity ? '\n⚠ Surcharge' : ''}">${ui.zoom === 'day' ? v : ''}</div>`;
+      }
+      rows += `<div class="g-row">${left([`${esc(t.name)} <span class="muted">· capacité ${t.capacity}</span>`, '', '', '', '', '', ''])}<div class="g-time" style="width:${tw}px">${cells}</div></div>`;
+    }
+  }
+
+  const g = $('#gantt'), sx = g.scrollLeft, first = !g.dataset.init;
+  g.innerHTML = `<div class="g-inner" style="width:calc(var(--leftw) + ${tw}px)">
+    <div class="bg" style="left:var(--leftw);width:${tw}px">${bg}</div>${rows}</div>`;
+  if (first) { g.dataset.init = 1; g.scrollLeft = Math.max(0, X(today) - 10 * dw); } else g.scrollLeft = sx;
+}
+
+function renderJournal() {
+  const phases = {};
+  state.chantiers.forEach(c => c.phases.forEach(p => phases[p.id] = {c, p}));
+  const list = [...state.entries].sort((a, b) => b.date.localeCompare(a.date) || b.ts - a.ts);
+  $('#journal').innerHTML = list.length ? `<table class="list"><thead><tr><th>Date</th><th>Chantier</th><th>Phase</th><th style="text-align:right">Passé (h)</th><th style="text-align:right">RAF (h)</th><th>Commentaire</th><th></th></tr></thead><tbody>${
+    list.map(e => { const x = phases[e.phaseId]; return `<tr><td>${fdl(e.date)}</td><td>${x ? `<span class="dot" style="background:${x.c.color}"></span>${esc(x.c.name)}` : '<span class="muted">?</span>'}</td><td>${esc(x?.p.name)}</td><td class="num">${num(e.spent, 2)}</td><td class="num">${num(e.raf, 2)}</td><td class="muted">${esc(e.comment)}</td><td><button class="icon" data-act="delEntry" data-id="${e.id}" title="Supprimer">✕</button></td></tr>`; }).join('')
+  }</tbody></table>` : '<p class="muted">Aucune saisie pour le moment.</p>';
+}
+
+/* ---------- Saisie de temps ---------- */
+const fS = $('#fSaisie');
+let rafTouched = false;
+function openSaisie(phaseId) {
+  const sel = fS.phaseId;
+  sel.innerHTML = state.chantiers.map(c => `<optgroup label="${esc(c.name)}">${c.phases.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</optgroup>`).join('');
+  if (!sel.options.length) return alert("Créez d'abord un chantier.");
+  if (phaseId) sel.value = phaseId;
+  fS.date.value = todayStr(); fS.spent.value = ''; fS.comment.value = ''; rafTouched = false;
+  refreshSaisie();
+  $('#dlgSaisie').showModal(); fS.spent.focus();
+}
+function refreshSaisie() {
+  const r = compute().phases[fS.phaseId.value]; if (!r) return;
+  const hpd = state.settings.hoursPerDay;
+  $('#saisieInfo').innerHTML = `Devis <b>${num(r.hours)} h</b> (${num(r.hours / hpd)} j·h) · Passé <b>${num(r.spent)} h</b> · RAF actuel <b>${num(r.raf)} h</b><br>Fin prévue : <b class="${r.late ? 'lateTxt' : ''}">${fdl(r.end)}</b> (devis : ${fdl(r.baseEnd)})`;
+  if (!rafTouched) fS.raf.value = Math.max(0, r.raf - (+fS.spent.value || 0));
+}
+fS.phaseId.addEventListener('change', () => { rafTouched = false; refreshSaisie(); });
+fS.spent.addEventListener('input', refreshSaisie);
+fS.raf.addEventListener('input', () => rafTouched = true);
+fS.addEventListener('submit', ev => {
+  ev.preventDefault();
+  state.entries.push({id: uid(), phaseId: fS.phaseId.value, date: fS.date.value, spent: +fS.spent.value, raf: +fS.raf.value,
+    comment: fS.comment.value.trim(), ts: Date.now()});
+  $('#dlgSaisie').close(); render();
+});
+
+/* ---------- Chantier ---------- */
+const fC = $('#fChantier');
+let editing = null;
+function phaseRow(p) {
+  const teams = `<option value="">—</option>` + state.teams.map(t => `<option value="${t.id}" ${t.id === p.teamId ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+  return `<tr data-id="${p.id}">
+    <td><input data-k="name" value="${esc(p.name)}" required></td>
+    <td><input data-k="hours" type="number" min="0" step="0.5" value="${p.hours}" required></td>
+    <td><input data-k="people" type="number" min="1" step="1" value="${p.people}" required></td>
+    <td><select data-k="teamId">${teams}</select></td>
+    <td><select data-k="startMode"><option value="after" ${p.startMode !== 'date' ? 'selected' : ''}>Après précédente</option><option value="date" ${p.startMode === 'date' ? 'selected' : ''}>Date fixe</option></select></td>
+    <td><input data-k="startDate" type="date" value="${p.startDate || ''}" ${p.startMode === 'date' ? '' : 'disabled'}></td>
+    <td class="muted dur"></td>
+    <td><button type="button" class="icon" data-del title="Supprimer la phase">✕</button></td></tr>`;
+}
+function updateDurations() {
+  const hpd = state.settings.hoursPerDay;
+  fC.querySelectorAll('#phRows tr').forEach(tr => {
+    const h = +tr.querySelector('[data-k=hours]').value || 0, ppl = Math.max(1, +tr.querySelector('[data-k=people]').value || 1);
+    tr.querySelector('.dur').textContent = Math.max(1, Math.ceil(h / (hpd * ppl))) + ' j';
+    const mode = tr.querySelector('[data-k=startMode]').value, di = tr.querySelector('[data-k=startDate]');
+    di.disabled = mode !== 'date'; di.required = mode === 'date';
+  });
+}
+function openChantier(id) {
+  editing = id ? state.chantiers.find(c => c.id === id) : null;
+  const c = editing || {name: '', client: '', color: ['#2f6fde', '#2e9d5b', '#b5651d', '#8e44ad', '#c0392b', '#16a085'][state.chantiers.length % 6], startDate: todayStr(),
+    phases: [{id: uid(), name: 'Réalisation', hours: 35, people: 2, teamId: state.teams[0]?.id || '', startMode: 'after', startDate: ''}]};
+  $('#chTitle').textContent = editing ? 'Modifier le chantier' : 'Nouveau chantier';
+  fC.name.value = c.name; fC.client.value = c.client; fC.color.value = c.color; fC.startDate.value = c.startDate;
+  $('#phRows').innerHTML = c.phases.map(phaseRow).join('');
+  $('#delChantier').style.display = editing ? '' : 'none';
+  updateDurations();
+  $('#dlgChantier').showModal();
+}
+$('#addPhase').onclick = () => {
+  $('#phRows').insertAdjacentHTML('beforeend', phaseRow({id: uid(), name: 'Phase ' + ($('#phRows').children.length + 1), hours: 14, people: 2, teamId: state.teams[0]?.id || '', startMode: 'after', startDate: ''}));
+  updateDurations();
+};
+$('#phRows').addEventListener('input', updateDurations);
+$('#phRows').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-del]'); if (!b) return;
+  const tr = b.closest('tr'), id = tr.dataset.id, nE = state.entries.filter(e => e.phaseId === id).length;
+  if ($('#phRows').children.length === 1) return alert('Un chantier doit avoir au moins une phase.');
+  if (nE && !confirm(`Cette phase a ${nE} saisie(s) de temps qui seront supprimées à l'enregistrement. Continuer ?`)) return;
+  tr.remove(); updateDurations();
+});
+fC.addEventListener('submit', ev => {
+  ev.preventDefault();
+  const phases = [...fC.querySelectorAll('#phRows tr')].map(tr => {
+    const v = k => tr.querySelector(`[data-k=${k}]`).value;
+    return {id: tr.dataset.id, name: v('name').trim(), hours: +v('hours'), people: Math.max(1, +v('people')), teamId: v('teamId'), startMode: v('startMode'), startDate: v('startDate')};
+  });
+  const data = {name: fC.name.value.trim(), client: fC.client.value.trim(), color: fC.color.value, startDate: fC.startDate.value, phases};
+  if (editing) {
+    const keep = new Set(phases.map(p => p.id)), old = editing.phases.map(p => p.id).filter(id => !keep.has(id));
+    state.entries = state.entries.filter(e => !old.includes(e.phaseId));
+    Object.assign(editing, data);
+  } else state.chantiers.push({id: uid(), ...data});
+  $('#dlgChantier').close(); render();
+});
+$('#delChantier').onclick = () => {
+  if (!confirm(`Supprimer le chantier « ${editing.name} » et toutes ses saisies ?`)) return;
+  const ids = new Set(editing.phases.map(p => p.id));
+  state.entries = state.entries.filter(e => !ids.has(e.phaseId));
+  state.chantiers = state.chantiers.filter(c => c !== editing);
+  $('#dlgChantier').close(); render();
+};
+
+/* ---------- Paramètres ---------- */
+const fP = $('#fSettings');
+const teamRow = t => `<tr data-id="${t.id}"><td><input data-k="name" value="${esc(t.name)}" required></td><td><input data-k="capacity" type="number" min="1" step="1" value="${t.capacity}" required></td><td><button type="button" class="icon" data-del>✕</button></td></tr>`;
+function openSettings() {
+  const s = state.settings;
+  fP.hoursPerDay.value = s.hoursPerDay; fP.frHolidays.checked = s.frHolidays; fP.holidays.value = s.holidays.join('\n');
+  $('#workDays').innerHTML = [1, 2, 3, 4, 5, 6, 0].map(d => `<label class="inline"><input type="checkbox" value="${d}" ${s.workDays.includes(d) ? 'checked' : ''}>${['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'][d]}</label>`).join('');
+  $('#teamRows').innerHTML = state.teams.map(teamRow).join('');
+  refreshDbInfo();
+  $('#dlgSettings').showModal();
+}
+
+/* ---------- Base de données (application Mac) ---------- */
+const fdt = ms => new Date(ms).toLocaleString('fr-FR', {dateStyle: 'short', timeStyle: 'short'});
+async function refreshDbInfo() {
+  const i = await api.info();
+  $('#dbDir').textContent = i.dataDir; $('#dbDir').title = i.dbFile;
+  $('#dbAuto').checked = i.autoBackup; $('#dbKeep').value = i.keepBackups;
+  $('#dbBackups').innerHTML = i.backups.length ? i.backups.slice(0, 15).map(b =>
+    `<div><span title="${esc(b.file)}">${esc(b.name.replace(/-\d{4}-\d\d-\d\d_.*$/, ''))} · ${fdt(b.mtime)}</span><button type="button" data-restore="${esc(b.file)}">Restaurer</button></div>`).join('')
+    : '<div><span class="muted">Aucune sauvegarde pour le moment.</span></div>';
+}
+async function dbAction(fn, okMsg) {
+  try {
+    const r = await fn();
+    if (r && okMsg) toast(okMsg + (typeof r === 'string' ? ` : ${r}` : ''));
+    refreshDbInfo();
+  } catch (e) { alert('Erreur : ' + e.message); }
+}
+$('#btnBackup').onclick = () => dbAction(api.backup, 'Sauvegarde créée');
+$('#dbBackupNow').onclick = () => dbAction(api.backup, 'Sauvegarde créée');
+$('#dbBackupAs').onclick = () => dbAction(api.backupAs, 'Sauvegarde enregistrée');
+$('#dbRestore').onclick = () => dbAction(() => api.restore());
+$('#dbChange').onclick = () => dbAction(api.changeDir);
+$('#dbReveal').onclick = () => api.reveal();
+$('#dbRevealBk').onclick = () => api.revealBackups();
+$('#dbBackups').onclick = ev => { const b = ev.target.closest('[data-restore]'); if (b) dbAction(() => api.restore(b.dataset.restore)); };
+const setOpts = () => dbAction(() => api.setBackupOptions({autoBackup: $('#dbAuto').checked, keepBackups: $('#dbKeep').value}));
+$('#dbAuto').onchange = setOpts; $('#dbKeep').onchange = setOpts;
+// Base remplacée (restauration, changement de dossier, import) : on recharge tout.
+api.onChanged(async () => {
+  state = await load();
+  document.querySelectorAll('dialog[open]').forEach(d => d.close());
+  delete $('#gantt').dataset.init;
+  render();
+  toast('Base de données chargée');
+});
+$('#addTeam').onclick = () => $('#teamRows').insertAdjacentHTML('beforeend', teamRow({id: uid(), name: 'Équipe ' + ($('#teamRows').children.length + 1), capacity: 2}));
+$('#teamRows').addEventListener('click', ev => { if (ev.target.closest('[data-del]')) ev.target.closest('tr').remove(); });
+fP.addEventListener('submit', ev => {
+  ev.preventDefault();
+  const workDays = [...$('#workDays').querySelectorAll('input:checked')].map(i => +i.value);
+  if (!workDays.length) return alert('Sélectionnez au moins un jour ouvré.');
+  const holidays = fP.holidays.value.split(/\s+/).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s));
+  state.settings = {hoursPerDay: +fP.hoursPerDay.value, workDays, frHolidays: fP.frHolidays.checked, holidays};
+  state.teams = [...$('#teamRows').querySelectorAll('tr')].map(tr => ({id: tr.dataset.id, name: tr.querySelector('[data-k=name]').value.trim(), capacity: +tr.querySelector('[data-k=capacity]').value}));
+  const ids = new Set(state.teams.map(t => t.id));
+  state.chantiers.forEach(c => c.phases.forEach(p => { if (!ids.has(p.teamId)) p.teamId = ''; }));
+  $('#dlgSettings').close(); render();
+});
+
+/* ---------- Actions globales ---------- */
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
+$('#btnSaisie').onclick = () => openSaisie();
+$('#btnNew').onclick = () => openChantier();
+$('#btnSettings').onclick = openSettings;
+$('#zoom').onchange = e => { ui.zoom = e.target.value; delete $('#gantt').dataset.init; render(); };
+$('#btnReset').onclick = async () => {
+  if (!confirm('Remplacer toutes les données par le jeu de démonstration ?\n(une sauvegarde de la base actuelle sera créée avant)')) return;
+  if (state.chantiers.length) await api.backup();
+  state = demo(); render();
+};
+$('#btnExport').onclick = () => dbAction(api.exportJson, 'Export terminé');
+$('#btnImport').onclick = () => dbAction(api.importJson);
+
+document.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-act]'); if (!el) return;
+  const {act, id} = el.dataset;
+  if (act === 'toggle') { ui.collapsed.has(id) ? ui.collapsed.delete(id) : ui.collapsed.add(id); render(); }
+  else if (act === 'edit') openChantier(id);
+  else if (act === 'saisie') openSaisie(id);
+  else if (act === 'delEntry' && confirm('Supprimer cette saisie ?')) { state.entries = state.entries.filter(e => e.id !== id); render(); }
+});
+
+const tip = $('#tip');
+document.addEventListener('mousemove', ev => {
+  const el = ev.target.closest('[data-tip]');
+  if (!el) { tip.style.display = 'none'; return; }
+  tip.textContent = el.dataset.tip; tip.style.display = 'block';
+  const x = Math.min(ev.clientX + 14, innerWidth - tip.offsetWidth - 8), y = ev.clientY + 16 + tip.offsetHeight > innerHeight ? ev.clientY - tip.offsetHeight - 10 : ev.clientY + 16;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+});
+
+load().then(s => { state = s; render(); });
+</script>
+</body>
+</html>

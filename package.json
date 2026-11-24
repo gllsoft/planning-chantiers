@@ -1,0 +1,51 @@
+{
+  "name": "planning-chantiers",
+  "productName": "Planning Chantiers",
+  "version": "1.0.0",
+  "description": "Planning des chantiers (Gantt) avec base de données locale",
+  "main": "main.js",
+  "private": true,
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
+  },
+  "author": "Planning Chantiers",
+  "scripts": {
+    "start": "electron .",
+    "dist": "node build/build.js",
+    "dist:universal": "node build/build.js --universal"
+  },
+  "build": {
+    "appId": "fr.planning-chantiers.app",
+    "productName": "Planning Chantiers",
+    "copyright": "© 2026",
+    "files": [
+      "main.js",
+      "preload.js",
+      "db.js",
+      "index.html",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg"
+        },
+        {
+          "target": "zip"
+        }
+      ],
+      "identity": null
+    },
+    "dmg": {
+      "title": "Planning Chantiers ${version}"
+    },
+    "afterPack": "build/adhoc-sign.js"
+  }
+}
