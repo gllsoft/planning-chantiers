@@ -43,7 +43,7 @@ try {
 }
 
 // Le module updater requiert electron : on n'en extrait que les fonctions pures.
-const src = fs.readFileSync(path.join(__dirname, '..', 'updater.js'), 'utf8');
+const src = fs.readFileSync(path.join(__dirname, '..', 'updater.js'), 'utf8').replace(/\r\n/g, '\n');
 const pick = re => src.match(re)[0];
 const {compareVersions, assetFor} = new Function(`${pick(/function compareVersions[\s\S]*?\n}\n/)}
   ${pick(/const ARCH_NAMES = .*\n/)}
