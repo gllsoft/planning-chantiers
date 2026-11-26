@@ -1,8 +1,11 @@
-# À chaque push sur main (fusion d'une PR) : construit une nouvelle version et la publie en Release GitHub.
-# Les applications installées détectent cette release et proposent la mise à jour.
+# À chaque push sur main (fusion d'une PR) : construit une nouvelle version pour macOS, Windows et Linux,
+# puis la publie en Release GitHub. Les applications installées détectent cette release et proposent la mise à jour.
 #
 # Numéro de version : celui de package.json s'il n'a jamais été publié (pour passer à 1.1.0 ou 2.0.0,
 # il suffit de le modifier dans la PR), sinon la dernière version publiée + 1 sur le dernier chiffre.
+#
+# La release n'est créée qu'une fois les trois plateformes construites : la « dernière release »
+# contient donc toujours les fichiers de toutes les plateformes.
 name: Release
 
 on:
@@ -18,18 +21,15 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build et publication
-    runs-on: macos-latest
+  version:
+    name: Numéro de version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
 
       - name: Déterminer le numéro de version
         id: version
@@ -46,6 +46,24 @@ jobs:
           echo "Dernière version publiée : ${LAST:-aucune} — nouvelle version : $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+  build:
+    name: Build ${{ matrix.label }}
+    needs: version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - {label: macOS, os: macos-latest}
+          - {label: Windows, os: windows-latest}
+          - {label: Linux, os: ubuntu-latest}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
       - name: Installer les dépendances
         run: npm ci
 
@@ -54,15 +72,39 @@ jobs:
 
       - name: Construire l'application
         run: |
-          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
+          npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version
           npm run dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.label }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.AppImage
+          if-no-files-found: error
+          retention-days: 3
+
+  release:
+    name: Publication
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
 
       - name: Publier la release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          gh release create "v$VERSION" dist/*.dmg dist/*.zip \
+          ls -l dist
+          gh release create "v$VERSION" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Planning Chantiers $VERSION" \
             --generate-notes \

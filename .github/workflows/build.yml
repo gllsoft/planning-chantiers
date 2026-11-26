@@ -1,5 +1,7 @@
-# Vérifie chaque Pull Request (et chaque push sur develop) : tests + construction de l'image .dmg,
-# téléchargeable dans l'onglet « Summary » du run (section Artifacts).
+# Vérifie chaque Pull Request (et chaque push sur develop) : tests + construction de l'application
+# pour macOS (.dmg), Windows (.exe) et Linux (.AppImage), téléchargeables dans l'onglet « Summary »
+# du run (section Artifacts).
+# Le contrôle requis par la règle de protection des branches s'appelle « Build macOS » : ne pas renommer.
 name: Build
 
 on:
@@ -18,8 +20,15 @@ permissions:
 
 jobs:
   build:
-    name: Build macOS
-    runs-on: macos-latest
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {label: macOS, os: macos-latest, files: dist/*.dmg}
+          - {label: Windows, os: windows-latest, files: dist/*.exe}
+          - {label: Linux, os: ubuntu-latest, files: dist/*.AppImage}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,10 +46,10 @@ jobs:
       - name: Construire l'application
         run: npm run dist
 
-      - name: Publier l'image .dmg (artefact)
+      - name: Publier l'installateur (artefact)
         uses: actions/upload-artifact@v4
         with:
-          name: planning-chantiers-${{ github.event.pull_request.head.sha || github.sha }}
-          path: dist/*.dmg
+          name: planning-chantiers-${{ matrix.label }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ matrix.files }}
           if-no-files-found: error
           retention-days: 14
