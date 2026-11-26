@@ -14,7 +14,7 @@
     "start": "electron .",
     "dist": "node build/build.js",
     "dist:universal": "node build/build.js --universal",
-    "test": "ELECTRON_RUN_AS_NODE=1 electron test/run.js"
+    "test": "node test/run.js"
   },
   "build": {
     "appId": "fr.planning-chantiers.app",
@@ -48,6 +48,40 @@
     },
     "dmg": {
       "title": "Planning Chantiers ${version}"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Planning Chantiers",
+      "uninstallDisplayName": "Planning Chantiers",
+      "artifactName": "planning-chantiers-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Office",
+      "synopsis": "Planning des chantiers (Gantt)",
+      "artifactName": "planning-chantiers-${version}-${arch}.${ext}"
     },
     "afterPack": "build/adhoc-sign.js"
   },

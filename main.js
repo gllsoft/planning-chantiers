@@ -9,14 +9,23 @@ const DB_NAME = 'planning-chantiers.sqlite';
 const BACKUP_DIR = 'Sauvegardes';
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 const DEFAULT_DIR = path.join(app.getPath('documents'), 'Planning Chantiers');
+const IS_MAC = process.platform === 'darwin';
+// Nom du gestionnaire de fichiers pour les libellés des menus.
+const FILE_MANAGER = IS_MAC ? 'le Finder' : process.platform === 'win32' ? "l'Explorateur" : 'le gestionnaire de fichiers';
 
-let config = {dataDir: DEFAULT_DIR, autoBackup: true, keepBackups: 30};
+// onboarded : le guide de première installation a été terminé.
+let config = {dataDir: DEFAULT_DIR, autoBackup: true, keepBackups: 30, onboarded: false};
 let store = null;
 let win = null;
+let createdDb = null; // base créée (vierge) pendant cette session : supprimée si on change de dossier sans l'utiliser
 
 /* ---------- Configuration ---------- */
 function loadConfig() {
-  try { Object.assign(config, JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'))); } catch {}
+  try {
+    const saved = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    // Installations antérieures au guide : déjà configurées, on ne le réaffiche pas.
+    Object.assign(config, {onboarded: true}, saved);
+  } catch {}
 }
 function saveConfig() {
   fs.mkdirSync(path.dirname(CONFIG_FILE), {recursive: true});
@@ -38,8 +47,18 @@ function checkWritable(dir) {
 
 function openStore(dir) {
   checkWritable(dir);
+  const existed = fs.existsSync(dbFile(dir));
   const s = new Store(dbFile(dir));
-  store?.close();
+  const old = store, oldFile = old?.file;
+  const discard = old && oldFile === createdDb && oldFile !== s.file && !old.hasChantiers();
+  old?.close();
+  // L'ancienne base, créée vierge pendant cette session et jamais utilisée, ne sert à rien : on la retire
+  // (ainsi que son dossier s'il est vide) pour ne pas laisser un dossier « Planning Chantiers » inutile.
+  if (discard) {
+    fs.rmSync(oldFile, {force: true});
+    try { fs.rmdirSync(path.dirname(oldFile)); } catch {}
+  }
+  if (!existed) createdDb = s.file;
   store = s;
   config.dataDir = dir;
   saveConfig();
@@ -47,7 +66,7 @@ function openStore(dir) {
 
 function notifyChanged() {
   win?.webContents.send('db:changed');
-  win?.setRepresentedFilename(dbFile());
+  if (IS_MAC) win?.setRepresentedFilename(dbFile());
 }
 
 /* ---------- Sauvegardes ---------- */
@@ -126,12 +145,13 @@ async function changeDir() {
     dialog.showErrorBox('Dossier inutilisable', `Impossible d'écrire dans ce dossier :\n${dir}\n\n${e.message}`);
     return false;
   }
+  const blank = !store.hasChantiers(); // rien à copier : pas de question à poser
   if (fs.existsSync(dbFile(dir))) {
     if (!Store.validate(dbFile(dir))) {
       dialog.showErrorBox('Base invalide', `Le fichier ${DB_NAME} présent dans ce dossier n'est pas une base valide.`);
       return false;
     }
-    const {response} = await dialog.showMessageBox(win, {
+    const {response} = blank ? {response: 0} : await dialog.showMessageBox(win, {
       type: 'question', buttons: ['Ouvrir cette base', 'La remplacer par la base actuelle', 'Annuler'], defaultId: 0, cancelId: 2,
       message: 'Une base de données existe déjà dans ce dossier.',
       detail: 'Voulez-vous travailler sur la base existante, ou l\'écraser avec vos données actuelles ? (dans ce cas, une sauvegarde de la base existante est d\'abord créée dans son dossier « Sauvegardes »)',
@@ -145,7 +165,8 @@ async function changeDir() {
       store.backupTo(dbFile(dir));
     }
   } else {
-    const {response} = await dialog.showMessageBox(win, {
+    // Base vierge : on y copie quand même les paramètres déjà saisis (heures/jour, équipes…).
+    const {response} = blank ? {response: 0} : await dialog.showMessageBox(win, {
       type: 'question', buttons: ['Copier la base actuelle', 'Démarrer une base vide', 'Annuler'], defaultId: 0, cancelId: 2,
       message: 'Aucune base dans ce dossier.',
       detail: 'Copier vos données actuelles vers ce dossier, ou y démarrer une nouvelle base ? L\'ancien fichier reste en place dans l\'ancien dossier.',
@@ -234,13 +255,13 @@ async function checkUpdates(manual = false) {
 
 async function installUpdate() {
   if (!pendingUpdate || installing) return false;
-  const target = updater.installablePath();
+  const target = updater.installTarget();
   if (!target.ok) {
     const {response} = await dialog.showMessageBox(win, {
-      type: 'warning', buttons: ['Télécharger l\'image disque', 'Annuler'], defaultId: 0, cancelId: 1,
+      type: 'warning', buttons: ['Télécharger la nouvelle version', 'Annuler'], defaultId: 0, cancelId: 1,
       message: 'Installation automatique impossible', detail: target.reason,
     });
-    if (response === 0) shell.openExternal(pendingUpdate.dmg || pendingUpdate.url);
+    if (response === 0) shell.openExternal(pendingUpdate.download || pendingUpdate.url);
     return false;
   }
   installing = true;
@@ -257,7 +278,7 @@ async function installUpdate() {
 
 /* ---------- IPC ---------- */
 const info = () => ({
-  version: app.getVersion(),
+  version: app.getVersion(), platform: process.platform, onboarded: !!config.onboarded, defaultDir: DEFAULT_DIR,
   dataDir: config.dataDir, dbFile: dbFile(), backupDir: backupDir(),
   autoBackup: config.autoBackup, keepBackups: config.keepBackups,
   backups: listBackups().slice(0, 50).map(({name, file, mtime}) => ({name, file, mtime})),
@@ -280,6 +301,7 @@ const handlers = {
     return info();
   },
   'db:exportJson': exportJson,
+  'app:guideDone': () => { config.onboarded = true; saveConfig(); return true; },
   'db:importJson': importJson,
   'update:check': () => checkUpdates(true),
   'update:pending': () => pendingUpdate,
@@ -297,41 +319,47 @@ async function menuAction(fn, okMsg) {
 }
 
 function buildMenu() {
+  const showGuide = () => win?.webContents.send('guide:show');
+  const updates = {label: 'Rechercher des mises à jour…', click: () => checkUpdates(true)};
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    {role: 'appMenu', submenu: [
+    ...(IS_MAC ? [{role: 'appMenu', submenu: [
       {role: 'about'},
-      {label: 'Rechercher des mises à jour…', click: () => checkUpdates(true)},
+      updates,
       {type: 'separator'},
       {role: 'services'},
       {type: 'separator'},
       {role: 'hide'}, {role: 'hideOthers'}, {role: 'unhide'},
       {type: 'separator'},
       {role: 'quit'},
-    ]},
+    ]}] : []),
     {label: 'Fichier', submenu: [
       {label: 'Sauvegarder maintenant', accelerator: 'CmdOrCtrl+S', click: () => menuAction(() => backup('manuelle'), 'Sauvegarde créée')},
       {label: 'Enregistrer une sauvegarde sous…', accelerator: 'CmdOrCtrl+Shift+S', click: () => menuAction(backupAs, 'Sauvegarde enregistrée')},
       {label: 'Restaurer une sauvegarde…', click: () => menuAction(() => restore())},
-      {label: 'Afficher les sauvegardes dans le Finder', click: () => handlers['db:revealBackups']()},
+      {label: `Afficher les sauvegardes dans ${FILE_MANAGER}`, click: () => handlers['db:revealBackups']()},
       {type: 'separator'},
       {label: 'Changer le dossier de travail…', click: () => menuAction(changeDir)},
-      {label: 'Afficher le dossier de travail dans le Finder', click: () => shell.openPath(config.dataDir)},
+      {label: `Afficher le dossier de travail dans ${FILE_MANAGER}`, click: () => shell.openPath(config.dataDir)},
       {type: 'separator'},
       {label: 'Exporter en JSON…', click: () => menuAction(exportJson, 'Export terminé')},
       {label: 'Importer depuis un JSON…', click: () => menuAction(importJson)},
       {type: 'separator'},
-      {role: 'close', label: 'Fermer la fenêtre'},
+      IS_MAC ? {role: 'close', label: 'Fermer la fenêtre'} : {role: 'quit', label: 'Quitter'},
     ]},
-    {role: 'editMenu'},
+    {role: 'editMenu', label: 'Édition'},
     {label: 'Présentation', submenu: [
       {role: 'reload', label: 'Recharger'},
       ...(app.isPackaged ? [] : [{role: 'toggleDevTools'}]),
       {type: 'separator'},
-      {role: 'resetZoom'}, {role: 'zoomIn'}, {role: 'zoomOut'},
+      {role: 'resetZoom', label: 'Taille réelle'}, {role: 'zoomIn', label: 'Zoom avant'}, {role: 'zoomOut', label: 'Zoom arrière'},
       {type: 'separator'},
-      {role: 'togglefullscreen'},
+      {role: 'togglefullscreen', label: 'Plein écran'},
     ]},
-    {role: 'windowMenu'},
+    ...(IS_MAC ? [{role: 'windowMenu'}] : []),
+    {role: 'help', label: 'Aide', submenu: [
+      {label: 'Guide de prise en main', click: showGuide},
+      ...(IS_MAC ? [] : [{type: 'separator'}, updates, {role: 'about', label: 'À propos de Planning Chantiers'}]),
+    ]},
   ]));
 }
 
@@ -346,7 +374,7 @@ function createWindow() {
   win.webContents.on('will-navigate', e => e.preventDefault());
   win.once('ready-to-show', () => win.show());
   win.on('closed', () => { win = null; });
-  win.setRepresentedFilename(dbFile());
+  if (IS_MAC) win.setRepresentedFilename(dbFile());
   win.loadFile(path.join(__dirname, 'index.html'));
 }
 
