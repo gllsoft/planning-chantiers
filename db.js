@@ -40,6 +40,11 @@ class Store {
     return !this.db.prepare('SELECT 1 FROM settings LIMIT 1').get();
   }
 
+  // Vrai si la base contient au moins un chantier (une base qui n'a que des paramètres compte comme vierge).
+  hasChantiers() {
+    return !!this.db.prepare('SELECT 1 FROM chantiers LIMIT 1').get();
+  }
+
   load() {
     if (this.isEmpty()) return null;
     const settings = {};

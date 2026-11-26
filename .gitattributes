@@ -1,0 +1,3 @@
+# Fins de ligne LF partout (y compris sur les runners Windows de la CI).
+* text=auto eol=lf
+*.png binary

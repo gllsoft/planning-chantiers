@@ -12,7 +12,7 @@
   --leftw:640px;
 }
 *{box-sizing:border-box}
-body{margin:0;font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text)}
+body{margin:0;font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Ubuntu,Cantarell,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text)}
 header{display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{font-size:16px;margin:0 16px 0 0}
 .spacer{flex:1}
@@ -117,6 +117,24 @@ table.edit th{font-size:11px;color:var(--muted);font-weight:500;text-align:left;
 table.edit td{padding:2px 4px}
 table.edit input,table.edit select{width:100%}
 .days{display:flex;gap:8px;flex-wrap:wrap}
+/* Guide de prise en main */
+#fGuide{width:640px;min-height:470px}
+#fGuide section{display:flex;flex-direction:column;gap:10px;flex:1}
+#fGuide section[hidden]{display:none}
+#fGuide p{margin:0}
+.gsteps{display:flex;gap:4px;font-size:11px;color:var(--muted);margin-bottom:4px}
+.gsteps span{flex:1;border-top:3px solid var(--line);padding-top:4px}
+.gsteps span.on{border-color:var(--accent);color:var(--text);font-weight:600}
+.gsteps span.done{border-color:#9dbbf0}
+.glist{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.gchoice{display:flex;flex-direction:column;gap:8px}
+.gchoice label{flex-direction:row;align-items:flex-start;gap:10px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;color:var(--text);font-size:13px}
+.gchoice label:has(input:checked){border-color:var(--accent);background:#f3f6fb}
+.gchoice label[hidden]{display:none}
+.gchoice small{display:block;color:var(--muted);font-size:12px}
+.glegend{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:center;font-size:12px;margin-top:6px}
+.glegend i{display:inline-block;width:22px;height:10px;border-radius:3px}
+code{font:12px ui-monospace,Menlo,Consolas,monospace;background:#eef1f5;border-radius:4px;padding:0 4px}
 #tip{position:fixed;z-index:100;pointer-events:none;background:#1d2430;color:#fff;font-size:12px;padding:6px 8px;border-radius:6px;white-space:pre-line;display:none;max-width:320px}
 </style>
 </head>
@@ -126,8 +144,9 @@ table.edit input,table.edit select{width:100%}
   <button class="primary" id="btnSaisie">+ Saisie de temps</button>
   <button id="btnNew">+ Chantier</button>
   <span class="spacer"></span>
-  <button id="btnBackup" title="Créer une sauvegarde de la base (⌘S)">Sauvegarder</button>
+  <button id="btnBackup" title="Créer une sauvegarde de la base">Sauvegarder</button>
   <button id="btnSettings">Paramètres</button>
+  <button id="btnGuide" title="Guide de prise en main">?</button>
   <button id="btnExport">Exporter</button>
   <button id="btnImport">Importer</button>
   <button id="btnReset" class="danger">Données démo</button>
@@ -222,7 +241,7 @@ table.edit input,table.edit select{width:100%}
         <div><div class="hint">Dossier de travail</div><div class="dbpath" id="dbDir"></div></div>
         <div class="dbrow">
           <button type="button" id="dbChange">Changer de dossier…</button>
-          <button type="button" id="dbReveal">Afficher dans le Finder</button>
+          <button type="button" id="dbReveal">Afficher le dossier</button>
         </div>
         <div class="hint">Sauvegardes (dossier « Sauvegardes » du dossier de travail)</div>
         <div class="dbrow">
@@ -241,6 +260,76 @@ table.edit input,table.edit select{width:100%}
         <button type="button" id="btnCheckUpdate">Rechercher des mises à jour</button></div>
     </div>
     <menu><span class="spacer"></span><button type="button" data-close>Annuler</button><button class="primary">Enregistrer</button></menu>
+  </form>
+</dialog>
+
+<!-- Guide de prise en main (affiché automatiquement à la première installation) -->
+<dialog id="dlgGuide">
+  <form id="fGuide">
+    <div class="gsteps" id="gSteps"></div>
+
+    <section data-step="Bienvenue">
+      <h2>Bienvenue dans Planning Chantiers</h2>
+      <p>Cet outil vous aide à planifier vos chantiers et à suivre leur avancement par rapport au devis.</p>
+      <ul class="glist">
+        <li><b>Planifier</b> : chaque chantier est découpé en phases chiffrées en heures ; l'application en déduit les dates et les affiche sur un diagramme de Gantt.</li>
+        <li><b>Suivre</b> : saisissez le temps passé et le reste à faire ; les dates prévues se recalculent et les retards par rapport au devis sont signalés.</li>
+        <li><b>Répartir</b> : la charge de chaque équipe est affichée jour par jour pour repérer les surcharges.</li>
+      </ul>
+      <p class="hint">Ce guide prend deux minutes. Vous pourrez le rouvrir à tout moment avec le bouton « ? » ou le menu Aide.</p>
+    </section>
+
+    <section data-step="Dossier" hidden>
+      <h2>Où enregistrer vos données ?</h2>
+      <p>Les données restent sur cet ordinateur, dans un fichier unique <code>planning-chantiers.sqlite</code> placé dans votre <b>dossier de travail</b>. Les sauvegardes automatiques sont rangées dans son sous-dossier « Sauvegardes ».</p>
+      <div class="dbbox">
+        <div><div class="hint">Dossier de travail</div><div class="dbpath" id="gDir"></div></div>
+        <div class="dbrow"><button type="button" id="gChangeDir">Choisir un autre dossier…</button><button type="button" id="gReveal">Ouvrir le dossier</button></div>
+        <div class="hint" id="gDirStatus"></div>
+      </div>
+      <div class="info">💡 Choisissez un dossier synchronisé (iCloud Drive, OneDrive, Dropbox, Google Drive…) pour retrouver votre planning sur un autre poste et le protéger en cas de panne. Si le dossier choisi contient déjà une base Planning Chantiers, elle est simplement ouverte.<br>Évitez d'utiliser l'application sur deux ordinateurs <i>en même temps</i> avec la même base.</div>
+    </section>
+
+    <section data-step="Organisation" hidden>
+      <h2>Votre organisation</h2>
+      <p class="hint">Ces réglages servent à convertir les heures du devis en jours de travail. Ils restent modifiables dans « Paramètres ».</p>
+      <label style="max-width:260px">Heures travaillées par jour et par personne<input type="number" id="gHours" min="1" max="24" step="0.25"></label>
+      <div><div class="hint" style="margin-bottom:4px">Jours ouvrés</div><div class="days" id="gWorkDays"></div></div>
+      <label class="inline"><input type="checkbox" id="gFrHol"> Exclure les jours fériés français</label>
+      <h3>Équipes</h3>
+      <p class="hint">Facultatif : une équipe a une capacité (nombre de personnes) ; l'application signale les jours où elle est surchargée.</p>
+      <table class="edit"><thead><tr><th>Nom</th><th style="width:140px">Capacité (personnes)</th><th style="width:30px"></th></tr></thead><tbody id="gTeamRows"></tbody></table>
+      <div><button type="button" id="gAddTeam">+ Équipe</button></div>
+    </section>
+
+    <section data-step="Prise en main" hidden>
+      <h2>Prise en main</h2>
+      <ol class="glist">
+        <li><b>« + Chantier »</b> : nom, client, date de début souhaitée et une ou plusieurs phases. Chaque phase a un devis en heures, un nombre de personnes et éventuellement une équipe ; sa durée en jours ouvrés est calculée automatiquement. Une phase en « Date fixe » permet d'interrompre le chantier et de le reprendre plus tard.</li>
+        <li><b>« + Saisie de temps »</b> (ou clic sur une barre du Gantt) : indiquez le temps passé et le <b>reste à faire</b>. C'est le reste à faire qui sert à prévoir la fin ; les phases suivantes glissent automatiquement.</li>
+        <li><b>Lire le Gantt</b> :
+          <div class="glegend">
+            <i style="background:#5b8def"></i><span>temps réalisé</span>
+            <i style="background:repeating-linear-gradient(135deg,#5b8def 0 6px,#b3c9f6 6px 12px)"></i><span>reste à faire (prévision)</span>
+            <i style="height:3px;background:#9aa3ae"></i><span>dates prévues au devis</span>
+            <i style="box-shadow:0 0 0 2px var(--late);background:#fff"></i><span>phase qui finira après la date du devis</span>
+          </div></li>
+        <li><b>Charge des équipes</b> (bas du Gantt) : vert foncé = équipe complète, rouge = surcharge.</li>
+        <li><b>Sauvegardes</b> : une sauvegarde automatique par jour, le bouton « Sauvegarder » (<span class="kbd-save"></span>) à tout moment, et la restauration depuis « Paramètres ».</li>
+      </ol>
+    </section>
+
+    <section data-step="Démarrer" hidden>
+      <h2>Pour commencer</h2>
+      <div class="gchoice" id="gChoice">
+        <label id="gKeepOpt"><input type="radio" name="gStart" value="keep"><span>Continuer avec la base ouverte<small id="gKeepInfo"></small></span></label>
+        <label id="gEmptyOpt"><input type="radio" name="gStart" value="empty"><span>Partir d'un planning vide<small>Créez ensuite votre premier chantier avec « + Chantier ».</small></span></label>
+        <label id="gDemoOpt"><input type="radio" name="gStart" value="demo"><span>Découvrir avec des données de démonstration<small>Trois chantiers et deux équipes fictifs pour essayer l'outil (ils remplacent les réglages de l’étape « Organisation ») ; supprimez-les ensuite depuis la fiche de chaque chantier.</small></span></label>
+        <label><input type="radio" name="gStart" value="import"><span>Importer un fichier JSON…<small>Reprendre des données exportées (menu Fichier › Exporter en JSON) depuis un autre poste.</small></span></label>
+      </div>
+    </section>
+
+    <menu><button type="button" id="gSkip">Passer le guide</button><span class="spacer"></span><button type="button" id="gPrev">Précédent</button><button class="primary" id="gNext">Suivant</button></menu>
   </form>
 </dialog>
 
@@ -628,13 +717,13 @@ const teamRow = t => `<tr data-id="${t.id}"><td><input data-k="name" value="${es
 function openSettings() {
   const s = state.settings;
   fP.hoursPerDay.value = s.hoursPerDay; fP.frHolidays.checked = s.frHolidays; fP.holidays.value = s.holidays.join('\n');
-  $('#workDays').innerHTML = [1, 2, 3, 4, 5, 6, 0].map(d => `<label class="inline"><input type="checkbox" value="${d}" ${s.workDays.includes(d) ? 'checked' : ''}>${['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'][d]}</label>`).join('');
+  $('#workDays').innerHTML = workDaysHtml(s.workDays);
   $('#teamRows').innerHTML = state.teams.map(teamRow).join('');
   refreshDbInfo();
   $('#dlgSettings').showModal();
 }
 
-/* ---------- Base de données (application Mac) ---------- */
+/* ---------- Base de données ---------- */
 const fdt = ms => new Date(ms).toLocaleString('fr-FR', {dateStyle: 'short', timeStyle: 'short'});
 async function refreshDbInfo() {
   const i = await api.info();
@@ -665,10 +754,10 @@ $('#dbAuto').onchange = setOpts; $('#dbKeep').onchange = setOpts;
 // Base remplacée (restauration, changement de dossier, import) : on recharge tout.
 api.onChanged(async () => {
   state = await load();
-  document.querySelectorAll('dialog[open]').forEach(d => d.close());
+  document.querySelectorAll('dialog[open]:not(#dlgGuide)').forEach(d => d.close());
   delete $('#gantt').dataset.init;
   render();
-  toast('Base de données chargée');
+  if ($('#dlgGuide').open) guide.changed(); else toast('Base de données chargée');
 });
 
 /* ---------- Mises à jour (Releases GitHub) ---------- */
@@ -697,6 +786,13 @@ $('#updInstall').onclick = async () => {
   }
 };
 $('#btnCheckUpdate').onclick = () => api.checkUpdate();
+// Lit les lignes d'équipes d'un tableau d'édition ; les phases d'une équipe supprimée n'ont plus d'équipe.
+function applyTeams(tbody) {
+  state.teams = [...tbody.querySelectorAll('tr')].map(tr => ({id: tr.dataset.id, name: tr.querySelector('[data-k=name]').value.trim() || 'Équipe', capacity: Math.max(1, +tr.querySelector('[data-k=capacity]').value || 1)}));
+  const ids = new Set(state.teams.map(t => t.id));
+  state.chantiers.forEach(c => c.phases.forEach(p => { if (!ids.has(p.teamId)) p.teamId = ''; }));
+}
+const workDaysHtml = days => [1, 2, 3, 4, 5, 6, 0].map(d => `<label class="inline"><input type="checkbox" value="${d}" ${days.includes(d) ? 'checked' : ''}>${['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'][d]}</label>`).join('');
 $('#addTeam').onclick = () => $('#teamRows').insertAdjacentHTML('beforeend', teamRow({id: uid(), name: 'Équipe ' + ($('#teamRows').children.length + 1), capacity: 2}));
 $('#teamRows').addEventListener('click', ev => { if (ev.target.closest('[data-del]')) ev.target.closest('tr').remove(); });
 fP.addEventListener('submit', ev => {
@@ -705,9 +801,7 @@ fP.addEventListener('submit', ev => {
   if (!workDays.length) return alert('Sélectionnez au moins un jour ouvré.');
   const holidays = fP.holidays.value.split(/\s+/).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s));
   state.settings = {hoursPerDay: +fP.hoursPerDay.value, workDays, frHolidays: fP.frHolidays.checked, holidays};
-  state.teams = [...$('#teamRows').querySelectorAll('tr')].map(tr => ({id: tr.dataset.id, name: tr.querySelector('[data-k=name]').value.trim(), capacity: +tr.querySelector('[data-k=capacity]').value}));
-  const ids = new Set(state.teams.map(t => t.id));
-  state.chantiers.forEach(c => c.phases.forEach(p => { if (!ids.has(p.teamId)) p.teamId = ''; }));
+  applyTeams($('#teamRows'));
   $('#dlgSettings').close(); render();
 });
 
@@ -743,7 +837,102 @@ document.addEventListener('mousemove', ev => {
   tip.style.left = x + 'px'; tip.style.top = y + 'px';
 });
 
-load().then(s => { state = s; render(); });
+/* ---------- Guide de prise en main ---------- */
+const guide = (() => {
+  const dlg = $('#dlgGuide'), steps = [...dlg.querySelectorAll('section[data-step]')];
+  let i = 0, firstRun = false, dirStatus = '';
+  const startChoice = () => dlg.querySelector('input[name=gStart]:checked')?.value;
+
+  async function show(n) {
+    i = Math.max(0, Math.min(steps.length - 1, n));
+    steps.forEach((s, k) => s.hidden = k !== i);
+    $('#gSteps').innerHTML = steps.map((s, k) => `<span class="${k === i ? 'on' : k < i ? 'done' : ''}">${k + 1}. ${s.dataset.step}</span>`).join('');
+    $('#gPrev').style.visibility = i ? '' : 'hidden';
+    $('#gNext').textContent = i === steps.length - 1 ? 'Terminer' : i ? 'Suivant' : 'Commencer';
+    const step = steps[i].dataset.step;
+    if (step === 'Dossier') {
+      const info = await api.info();
+      $('#gDir').textContent = info.dataDir; $('#gDir').title = info.dbFile;
+      $('#gDirStatus').textContent = dirStatus;
+    } else if (step === 'Organisation') {
+      const s = state.settings;
+      $('#gHours').value = s.hoursPerDay; $('#gFrHol').checked = s.frHolidays;
+      $('#gWorkDays').innerHTML = workDaysHtml(s.workDays);
+      $('#gTeamRows').innerHTML = state.teams.map(teamRow).join('');
+    } else if (step === 'Démarrer') {
+      const n = state.chantiers.length;
+      $('#gKeepOpt').hidden = !n; $('#gEmptyOpt').hidden = !!n; $('#gDemoOpt').hidden = !!n;
+      $('#gKeepInfo').textContent = `${n} chantier${n > 1 ? 's' : ''} dans cette base.`;
+      dlg.querySelector(`input[value=${n ? 'keep' : 'empty'}]`).checked = true;
+    }
+  }
+
+  // Enregistre l'étape « Organisation » ; renvoie false si la saisie est invalide.
+  function applySettings() {
+    const hours = +$('#gHours').value, workDays = [...$('#gWorkDays').querySelectorAll('input:checked')].map(c => +c.value);
+    if (!(hours > 0 && hours <= 24)) { alert('Indiquez un nombre d\'heures par jour entre 1 et 24.'); return false; }
+    if (!workDays.length) { alert('Sélectionnez au moins un jour ouvré.'); return false; }
+    Object.assign(state.settings, {hoursPerDay: hours, workDays, frHolidays: $('#gFrHol').checked});
+    applyTeams($('#gTeamRows'));
+    render();
+    return true;
+  }
+
+  async function finish() {
+    const choice = startChoice();
+    if (choice === 'import') {
+      try { if (!await api.importJson()) return; } catch (e) { return alert('Erreur : ' + e.message); }
+    } else if (choice === 'demo') {
+      state = demo(); // jeu complet (avec ses propres équipes et réglages)
+      render();
+    }
+    dlg.close();
+    if (choice === 'empty') toast('Créez votre premier chantier avec « + Chantier »');
+  }
+
+  $('#gNext').onclick = async ev => {
+    ev.preventDefault();
+    const step = steps[i].dataset.step;
+    if (step === 'Organisation' && !applySettings()) return;
+    if (i === steps.length - 1) return finish();
+    show(i + 1);
+  };
+  $('#gPrev').onclick = () => show(i - 1);
+  $('#gSkip').onclick = () => dlg.close();
+  $('#fGuide').addEventListener('submit', ev => ev.preventDefault());
+  $('#gChangeDir').onclick = () => dbAction(api.changeDir);
+  $('#gReveal').onclick = () => api.reveal();
+  $('#gAddTeam').onclick = () => $('#gTeamRows').insertAdjacentHTML('beforeend', teamRow({id: uid(), name: 'Équipe ' + ($('#gTeamRows').children.length + 1), capacity: 2}));
+  $('#gTeamRows').addEventListener('click', ev => { if (ev.target.closest('[data-del]')) ev.target.closest('tr').remove(); });
+  // Fermeture (Terminer, Passer, Échap) : le guide ne sera plus proposé au démarrage.
+  dlg.addEventListener('close', () => { if (firstRun) { firstRun = false; api.guideDone(); } });
+
+  return {
+    open(first = false) { firstRun = first; dirStatus = ''; show(0); dlg.showModal(); },
+    // Base remplacée pendant le guide (changement de dossier, import) : on rafraîchit l'étape affichée.
+    changed() {
+      const n = state.chantiers.length;
+      dirStatus = n ? `✔ Base existante ouverte : ${n} chantier${n > 1 ? 's' : ''}.` : '✔ La base sera enregistrée dans ce dossier.';
+      show(i);
+    },
+  };
+})();
+$('#btnGuide').onclick = () => guide.open();
+api.onShowGuide(() => { document.querySelectorAll('dialog[open]').forEach(d => d.close()); guide.open(); });
+
+/* ---------- Libellés selon le système (macOS, Windows, Linux) ---------- */
+{
+  const mac = api.platform === 'darwin';
+  const fm = mac ? 'le Finder' : api.platform === 'win32' ? "l'Explorateur" : 'le gestionnaire de fichiers';
+  $('#dbReveal').textContent = `Afficher dans ${fm}`;
+  $('#btnBackup').title = `Créer une sauvegarde de la base (${mac ? '⌘S' : 'Ctrl+S'})`;
+  document.querySelectorAll('.kbd-save').forEach(e => e.textContent = mac ? '⌘S' : 'Ctrl+S');
+}
+
+load().then(async s => {
+  state = s; render();
+  if (!(await api.info()).onboarded) guide.open(true);
+});
 </script>
 </body>
 </html>
